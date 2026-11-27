@@ -10,8 +10,8 @@ Tiến độ chi tiết: xem [ROADMAP.md](ROADMAP.md). Sổ tay tự học: [doc
 - **Không bao giờ commit secret**: `.env`, `*.key`, `*.pem`, `terraform.tfstate`, kubeconfig. Secret thật nằm ở AWS Secrets Manager → External Secrets.
 - Mọi hạ tầng đều là code (Terraform / Helm / ArgoCD). Không click tay trên AWS Console (trừ bước bootstrap tài khoản).
 - CI đăng nhập AWS bằng **OIDC**, không dùng access key.
-- Mỗi phase = 1 branch + 1 PR, merge xong gắn tag `v0.<phase>`.
-- Commit: Conventional Commits 1 dòng ngắn (`feat(todo-service): add crud endpoints`), không body dài. Giữ trailer Co-Authored-By: Claude.
+- Mỗi phase = 1 branch + 1 PR, merge xong gắn tag `v0.<phase>`. Tên branch/commit/PR mô tả nội dung thay đổi (`ci/github-actions`, `build: add docker compose stack`), **không đặt theo phase**.
+- Commit: Conventional Commits 1 dòng ngắn (`feat(todo-service): add crud endpoints`), không body dài. Author: `Hien Le` (GitHub `lnt-h`, email noreply, cấu hình local trong repo). Chỉ thêm trailer Co-Authored-By: Claude.
 - **Tiết kiệm credit AWS ($200)**: chỉ bật EKS khi làm việc, `terraform destroy` cuối buổi. Có Budget alert $10/$50/$100.
 
 ## Tech stack
