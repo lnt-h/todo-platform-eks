@@ -1,0 +1,61 @@
+name: todo-service
+
+# Run only when todo-service code, this file, or the shared image workflow changes.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/todo-service/**"
+      - ".github/workflows/todo-service.yml"
+      - ".github/workflows/docker-image.yml"
+  pull_request:
+    paths:
+      - "apps/todo-service/**"
+      - ".github/workflows/todo-service.yml"
+      - ".github/workflows/docker-image.yml"
+
+# Least privilege: by default the token can only read the repo.
+permissions:
+  contents: read
+
+# A new push to the same branch cancels the old, still-running run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/todo-service
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: apps/todo-service/go.mod
+          cache-dependency-path: apps/todo-service/go.sum
+
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "Run gofmt on:"; echo "$unformatted"; exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -race -cover ./...
+
+  image:
+    needs: test
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/docker-image.yml
+    with:
+      name: todo-service
+      context: apps/todo-service

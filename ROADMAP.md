@@ -26,11 +26,13 @@
 - [x] Trivy scan local: frontend và todo-service 0 HIGH/CRITICAL
 
 ## Phase 3 — CI với GitHub Actions (`v0.3`)
-- [ ] Workflow riêng cho từng service, có path filter
-- [ ] Lint + test + build image
-- [ ] Trivy scan image (fail nếu CRITICAL)
-- [ ] Push image lên GHCR, tag theo git SHA
-- [ ] Badge CI trên README
+- [x] Workflow riêng cho từng app, có path filter + reusable workflow `docker-image.yml`
+- [x] Lint + test + build image
+- [x] Trivy scan image (fail nếu HIGH/CRITICAL có bản vá)
+- [x] Push image lên GHCR (chỉ từ main), tag theo git SHA
+- [x] Badge CI trên README
+- [x] Workflow security: gitleaks (toàn lịch sử) + actionlint; action pin theo SHA
+- [x] Ruleset bảo vệ main: bắt buộc PR + check gitleaks/actionlint, cấm force push
 
 ## Phase 4 — Kubernetes local với kind (`v0.4`)
 - [ ] Helm chart: Deployment, Service, Ingress, ConfigMap, Secret
@@ -87,3 +89,5 @@
 | 2026-11-27 | Phase 1: todo-service (Go) và user-service (Fastify) CRUD + Postgres + metrics + health, test pass |
 | 2026-11-27 | Phase 1: frontend React gọi API qua Vite proxy, chạy thử full stack local OK |
 | 2026-11-27 | Phase 2: Dockerfile cho 3 app, docker compose, vá CVE nginx (57 → 0), pre-commit + gitleaks |
+| 2026-11-28 | Sửa git identity (author Hien Le, bỏ tên commit theo phase), bật squash-only |
+| 2026-11-28 | Phase 3: 5 workflow GitHub Actions xanh, README + badge, ruleset bảo vệ main |
