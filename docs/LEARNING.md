@@ -101,6 +101,25 @@ Cuối mỗi phase có phần **Câu hỏi phỏng vấn** để tự kiểm tra
 - Handler chỉ biết interface `Store`, không biết Postgres. Unit test dùng Memory store nên chạy khoảng 1s mà không cần DB, và CI nhanh.
 - `go test -race` phát hiện lỗi truy cập đồng thời (race condition).
 
+### user-service (Node/Fastify): cùng khái niệm, khác ngôn ngữ
+| Khái niệm | Go (todo-service) | Node (user-service) |
+|---|---|---|
+| Log JSON | `slog.NewJSONHandler` | pino (có sẵn trong Fastify) |
+| Metrics | `client_golang` | `prom-client` (cùng tên metric để dùng chung dashboard) |
+| Graceful shutdown | `signal.NotifyContext` + `srv.Shutdown` | `close-with-grace` + `app.close()` |
+| Validation | Tự kiểm tra trong handler | JSON Schema, Fastify trả 400 trước khi vào handler |
+| Bỏ log probe | Lọc trong middleware | `logLevel: 'silent'` trên route |
+
+- **Tự viết entrypoint `server.ts`** thay vì `fastify start`: kiểm soát rõ việc bắt SIGTERM, đọc env, listen. Container nên chạy thẳng `node dist/server.js`.
+- **Listen `0.0.0.0` chứ không phải `localhost`**: trong container, `localhost` chỉ là chính container đó. Listen localhost thì bên ngoài (Docker, K8s Service) không gọi vào được. Đây là lỗi kinh điển khi mới đóng gói Docker.
+- **HTTP status đúng nghĩa**: 201 Created, 204 No Content, 400 dữ liệu sai, 404 không tìm thấy, **409 Conflict** khi trùng email (DB báo mã lỗi `23505` unique violation), 503 khi chưa sẵn sàng.
+- **Đặt tên metric giống nhau giữa các service** (`http_requests_total`) thì 1 dashboard Grafana dùng được cho mọi service, chỉ cần lọc theo label `job`.
+
+### Bài học debug
+- zsh **không tự tách biến** như bash: `J='-H a:b'; curl $J` truyền cả chuỗi thành 1 tham số. Header bị dấu cách thừa nên Node trả 400 "Client Error" ngay ở tầng parser HTTP, request không vào tới router (metrics không đếm).
+- Cách debug: `curl -v` xem request thô. Request không xuất hiện trong metrics/log của app nghĩa là bị chặn trước khi tới code.
+- Template/thư viện đổi API theo phiên bản: Fastify 5 coi `err` trong error handler là `unknown`, phải khai báo `FastifyError`.
+
 ### Giới hạn đã biết (để cải tiến sau)
 - Tự tạo bảng bằng `CREATE TABLE IF NOT EXISTS` lúc khởi động. Thực tế dùng công cụ migration (golang-migrate, Flyway) chạy bằng K8s Job hoặc initContainer.
 
@@ -110,3 +129,5 @@ Cuối mỗi phase có phần **Câu hỏi phỏng vấn** để tự kiểm tra
 3. High cardinality trong Prometheus là gì, tránh thế nào?
 4. Vì sao log nên ở dạng JSON?
 5. 12-Factor App nói gì về config?
+6. Vì sao app trong container phải listen `0.0.0.0`?
+7. Khi nào trả 400, 404, 409, 503?
