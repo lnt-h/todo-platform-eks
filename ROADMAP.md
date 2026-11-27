@@ -13,10 +13,10 @@
 
 ## Phase 1 — App tối giản (`v0.1`)
 - [x] Scaffold 3 app (create-vite, fastify-cli, go mod init) + `/healthz` có test
-- [ ] `todo-service` (Go): CRUD todos, `/healthz`, `/metrics`, log JSON
-- [ ] `user-service` (Node/TS): CRUD users, `/healthz`, `/metrics`
-- [ ] `frontend` (React + Vite): danh sách todo, gọi 2 API
-- [ ] Unit test cơ bản cho mỗi service
+- [x] `todo-service` (Go): CRUD todos, `/healthz`, `/readyz`, `/metrics`, log JSON, graceful shutdown
+- [x] `user-service` (Node/TS): CRUD users, `/healthz`, `/readyz`, `/metrics`, log JSON, graceful shutdown
+- [x] `frontend` (React + Vite): todo + user, gọi 2 API qua proxy `/api`
+- [x] Unit test cho 2 service (Go 81%, Node 98% coverage); frontend kiểm tra bằng lint + build
 
 ## Phase 2 — Docker (`v0.2`)
 - [ ] Dockerfile multi-stage, non-root, distroless cho từng service
@@ -83,3 +83,5 @@
 | 2026-11-27 | Cài helm, kind, go, pnpm, pre-commit, trivy, terraform; git init; scaffold frontend, user-service, todo-service |
 | 2026-11-27 | Tạo repo public github.com/lnt-h/todo-platform-eks, push commit đầu |
 | 2026-11-27 | Phase 0 xong: IAM user + MFA, budgets, anomaly detection, aws login profile `todo` |
+| 2026-11-27 | Phase 1: todo-service (Go) và user-service (Fastify) CRUD + Postgres + metrics + health, test pass |
+| 2026-11-27 | Phase 1: frontend React gọi API qua Vite proxy, chạy thử full stack local OK |
