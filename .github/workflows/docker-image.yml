@@ -52,13 +52,16 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ inputs.name }}
 
       # Fail on HIGH/CRITICAL issues that already have a fix.
+      # Trivy runs from its official image (pinned version) and reads the
+      # freshly built image through the Docker socket. trivy-action was dropped
+      # because its installer could no longer download the Trivy binary.
       - name: Scan image with Trivy
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          image-ref: ${{ env.IMAGE }}:sha-${{ github.sha }}
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: "1"
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:0.76.2 image \
+            --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress \
+            "$IMAGE:sha-$GITHUB_SHA"
 
       - name: Log in to GHCR
         if: github.ref == 'refs/heads/main'
