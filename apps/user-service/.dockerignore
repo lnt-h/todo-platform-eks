@@ -1,0 +1,10 @@
+# node_modules and dist are rebuilt inside the image, never copied from the host.
+node_modules
+dist
+coverage
+.nyc_output
+test
+Dockerfile
+.dockerignore
+*.md
+.env*

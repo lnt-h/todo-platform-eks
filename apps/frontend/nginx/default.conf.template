@@ -1,0 +1,44 @@
+# Rendered at container start: ${TODO_API_URL} and ${USER_API_URL} come from env vars
+# (nginx image runs envsubst on /etc/nginx/templates/*.template).
+server {
+    listen 8080;
+    server_name _;
+    root /usr/share/nginx/html;
+
+    server_tokens off;
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options DENY always;
+
+    # Liveness for Docker/Kubernetes, not logged.
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    # Reverse proxy: /api/todos/* -> todo-service /todos/*
+    location /api/todos {
+        rewrite ^/api(/.*)$ $1 break;
+        proxy_pass ${TODO_API_URL};
+        include /etc/nginx/conf.d/proxy_params.inc;
+    }
+
+    # Reverse proxy: /api/users/* -> user-service /users/*
+    location /api/users {
+        rewrite ^/api(/.*)$ $1 break;
+        proxy_pass ${USER_API_URL};
+        include /etc/nginx/conf.d/proxy_params.inc;
+    }
+
+    # Hashed build assets never change: cache for a year.
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # SPA: unknown paths fall back to index.html, which is never cached.
+    location / {
+        try_files $uri /index.html;
+        add_header Cache-Control "no-cache";
+    }
+}

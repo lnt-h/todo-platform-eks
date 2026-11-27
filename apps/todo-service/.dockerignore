@@ -1,0 +1,6 @@
+# Only source code goes into the build context.
+**/*_test.go
+Dockerfile
+.dockerignore
+*.md
+.env*

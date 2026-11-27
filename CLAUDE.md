@@ -10,8 +10,8 @@ Tiến độ chi tiết: xem [ROADMAP.md](ROADMAP.md). Sổ tay tự học: [doc
 - **Không bao giờ commit secret**: `.env`, `*.key`, `*.pem`, `terraform.tfstate`, kubeconfig. Secret thật nằm ở AWS Secrets Manager → External Secrets.
 - Mọi hạ tầng đều là code (Terraform / Helm / ArgoCD). Không click tay trên AWS Console (trừ bước bootstrap tài khoản).
 - CI đăng nhập AWS bằng **OIDC**, không dùng access key.
-- Mỗi phase = 1 branch + 1 PR, merge xong gắn tag `v0.<phase>`.
-- Commit: Conventional Commits 1 dòng ngắn (`feat(todo-service): add crud endpoints`), không body dài. Giữ trailer Co-Authored-By: Claude.
+- Mỗi phase = 1 branch + 1 PR, merge xong gắn tag `v0.<phase>`. Tên branch/commit/PR mô tả nội dung thay đổi (`ci/github-actions`, `build: add docker compose stack`), **không đặt theo phase**.
+- Commit: Conventional Commits 1 dòng ngắn (`feat(todo-service): add crud endpoints`), không body dài. Author: `Hien Le` (GitHub `lnt-h`, email noreply, cấu hình local trong repo). Chỉ thêm trailer Co-Authored-By: Claude.
 - **Tiết kiệm credit AWS ($200)**: chỉ bật EKS khi làm việc, `terraform destroy` cuối buổi. Có Budget alert $10/$50/$100.
 
 ## Tech stack
@@ -51,7 +51,18 @@ cd apps/todo-service && go test -race ./...
 cd apps/user-service && npm test
 cd apps/frontend && npm run lint && npm run build
 
-# Chạy local (cần Postgres; Phase 2 sẽ thay bằng docker compose up)
+# Chạy toàn bộ bằng Docker (khuyên dùng): http://localhost:8000
+docker compose up -d --build --wait
+docker compose logs -f todo-service
+docker compose down          # thêm -v để xóa luôn dữ liệu Postgres
+
+# Quét lỗ hổng image
+trivy image --severity HIGH,CRITICAL --ignore-unfixed todo-platform/frontend:dev
+
+# pre-commit (chạy tự động khi commit; chạy tay cho mọi file)
+pre-commit run --all-files
+
+# Chạy từng service không qua Docker (cần Postgres riêng)
 DATABASE_URL=postgres://... go run ./cmd/server          # todo-service :8080
 DATABASE_URL=postgres://... npm run dev                  # user-service :3000
 npm run dev                                              # frontend :5173, proxy /api/* tới 2 service
