@@ -1,0 +1,61 @@
+# Local development stack: `docker compose up --build`, then open http://localhost:8000
+# Only the frontend is published to the host; services talk over the internal network.
+
+name: todo-platform
+
+x-db-password: &db-password ${POSTGRES_PASSWORD:-devpassword}
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: *db-password
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - ./deploy/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  todo-service:
+    build: ./apps/todo-service
+    image: todo-platform/todo-service:dev
+    environment:
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-devpassword}@postgres:5432/todos?sslmode=disable
+      PORT: "8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  user-service:
+    build: ./apps/user-service
+    image: todo-platform/user-service:dev
+    environment:
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-devpassword}@postgres:5432/users
+      PORT: "3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build: ./apps/frontend
+    image: todo-platform/frontend:dev
+    environment:
+      TODO_API_URL: http://todo-service:8080
+      USER_API_URL: http://user-service:3000
+    ports:
+      - "8000:8080"
+    depends_on:
+      todo-service:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
