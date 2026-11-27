@@ -270,6 +270,17 @@ workflow (.github/workflows/*.yml)
 - **Defense in depth**: pre-commit trên máy (lớp 1) + gitleaks trong CI (lớp 2, áp dụng cho mọi người).
 - actionlint: lint chính file workflow. Chạy trên máy (`actionlint`) và trong CI (Docker image có phiên bản cố định).
 
+### Sự cố: PR xanh nhưng main đỏ (Trivy)
+- Triệu chứng: merge PR #4 xong, cả 3 job image trên `main` fail ở bước Trivy, dù trên PR đều xanh.
+- Đọc log (`gh run view <id> --log-failed`) thì thấy `unable to find 'v0.70.0'`: lỗi ở **bước cài Trivy**, không phải image có lỗ hổng.
+- Nguyên nhân: trên PR, binary Trivy được lấy từ **cache**. Cache của GitHub Actions **tách theo branch**: `main` không đọc được cache của branch PR, nên phải tải mới, và installer của `trivy-action` không còn tải được.
+- Chạy lại (`gh run rerun --failed`) vẫn lỗi y hệt, nên đây là lỗi cố định, không phải flaky.
+- Cách sửa: chạy Trivy bằng Docker image chính thức có phiên bản cố định (`aquasec/trivy:0.76.2`), đọc image qua Docker socket. Thử trên máy trước, rồi sửa qua PR (main đã được bảo vệ).
+- Bài học:
+  - Cache có thể **che giấu lỗi**. Bước nào cần tải từ Internet thì nên có đường không phụ thuộc cache.
+  - Đọc log từ dưới lên, tìm dòng `error`/`crit` đầu tiên.
+  - Ít phụ thuộc action bên thứ ba hơn thì ít rủi ro hơn. Công cụ có Docker image chính thức thì chạy thẳng image.
+
 ### Node trong CI
 - `npm ci` chứ không phải `npm install`: cài đúng y `package-lock.json`, lệch là báo lỗi. CI phải **reproducible**.
 - `setup-node` với `cache: npm`: dùng lock file làm khóa cache.
