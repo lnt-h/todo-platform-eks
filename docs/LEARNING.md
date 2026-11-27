@@ -223,3 +223,80 @@ Browser → /api/todos/* → proxy → todo-service /todos/*
 6. `depends_on` có đảm bảo service phụ thuộc đã sẵn sàng không? (Chỉ khi dùng `condition: service_healthy`.)
 7. Trivy báo lỗ hổng ở base image thì xử lý ra sao? Lỗ hổng chưa có bản vá thì sao?
 8. Lỡ commit secret lên GitHub thì làm gì đầu tiên?
+
+---
+
+## Phase 3: CI với GitHub Actions
+
+### Cấu trúc một workflow
+```
+workflow (.github/workflows/*.yml)
+├── on:           khi nào chạy (push, pull_request, schedule, workflow_call…)
+├── permissions:  quyền của GITHUB_TOKEN
+└── jobs:         mặc định chạy song song
+    └── <job>:
+        ├── runs-on: ubuntu-latest   (máy ảo mới mỗi lần, chạy xong bị xóa)
+        ├── needs: <job khác>        (nối job thành pipeline)
+        └── steps:                   (chạy tuần tự)
+            ├── uses: owner/action@sha   (action làm sẵn, tham số qua with:)
+            └── run: lệnh shell          (run: | cho nhiều dòng)
+```
+- `${{ ... }}` là biểu thức: `github.ref`, `github.sha`, `inputs.x`, `steps.<id>.outputs.y`, `secrets.GITHUB_TOKEN`.
+- **Exit code khác 0 thì step fail**, kéo theo job fail và PR hiện ✗. Mọi kiểm tra trong CI đều dựa trên quy tắc này.
+- `if: github.ref == 'refs/heads/main'`: step chỉ chạy ở main. Ở PR thì bị skipped (–).
+
+### Path filter (monorepo)
+- `on.push.paths` / `on.pull_request.paths`: chỉ chạy khi thư mục của app thay đổi, tiết kiệm phút CI.
+- Với `pull_request`, GitHub so **toàn bộ diff của PR với base**, không chỉ commit vừa push.
+- Phải thêm cả file workflow và file reusable vào `paths`.
+
+### Reusable workflow
+- File `docker-image.yml` có `on: workflow_call` + `inputs` (giống tham số hàm). Bên gọi dùng `uses: ./.github/workflows/docker-image.yml` + `with:` ở **cấp job**.
+- Bên gọi phải cấp `permissions` (`packages: write`). Workflow được gọi không thể có nhiều quyền hơn bên gọi.
+- DRY: 3 app dùng chung 1 job build/scan/push. Sửa một chỗ là áp dụng cho cả ba.
+
+### Pipeline image
+1. `docker/metadata-action` sinh tag `sha-<commit>` (luôn có) và `latest` (chỉ ở main). Tag theo SHA giúp truy được image build từ commit nào và rollback dễ.
+2. Build với `load: true`: nạp vào Docker trên máy CI, chưa push.
+3. **Trivy scan là security gate** (`exit-code: 1`, `ignore-unfixed`). Quét xong mới push, nên image có lỗ hổng không bao giờ lên registry.
+4. Push lên GHCR **chỉ từ main**, đăng nhập bằng `GITHUB_TOKEN` có sẵn (không tạo secret).
+- `cache-from/cache-to: type=gha`: layer cache lưu ở GitHub Actions cache.
+
+### Bảo mật CI
+- `permissions: contents: read` ở đầu file: least privilege cho `GITHUB_TOKEN`. Chỉ job cần mới được cấp thêm quyền.
+- **Pin action theo commit SHA** (`@3d3c42e… # v7.0.1`): tag có thể bị kẻ xấu chuyển sang code độc hại (tấn công chuỗi cung ứng), SHA thì không đổi được.
+- `concurrency` + `cancel-in-progress`: hủy run cũ khi có push mới.
+- gitleaks với `fetch-depth: 0`: quét **toàn bộ lịch sử**. Secret đã xóa ở commit sau vẫn còn trong lịch sử git.
+- **Defense in depth**: pre-commit trên máy (lớp 1) + gitleaks trong CI (lớp 2, áp dụng cho mọi người).
+- actionlint: lint chính file workflow. Chạy trên máy (`actionlint`) và trong CI (Docker image có phiên bản cố định).
+
+### Node trong CI
+- `npm ci` chứ không phải `npm install`: cài đúng y `package-lock.json`, lệch là báo lỗi. CI phải **reproducible**.
+- `setup-node` với `cache: npm`: dùng lock file làm khóa cache.
+- `setup-go` với `go-version-file: go.mod`: máy dev và CI cùng một phiên bản Go.
+
+### Branch protection (Ruleset)
+- Luật cho `main`: bắt buộc PR, bắt buộc check `gitleaks` + `actionlint` xanh, cấm force push, cấm xóa, chỉ cho squash merge.
+- **Bẫy**: đặt check có path filter (vd `todo-service / test`) là bắt buộc thì PR chỉ sửa frontend sẽ **kẹt mãi** ở "Waiting for status", vì workflow không chạy nên check không bao giờ có kết quả. Chỉ bắt buộc check **luôn chạy**. Cải tiến sau: dùng job "gate" tổng hợp kết quả.
+- Repo một người thì số người duyệt bằng 0 (GitHub không cho tự approve PR của mình). Công ty thường 1–2.
+
+### Git: danh tính và lịch sử
+- Không cấu hình `user.email` thì git tự ghép `user@hostname`. Hostname là IP LAN, đổi theo wifi, nên GitHub thấy nhiều "người lạ", commit không có avatar và không tính vào contribution graph.
+- Dùng email noreply `<id>+<login>@users.noreply.github.com`: gắn đúng tài khoản mà không lộ email thật. Cấu hình **local** trong repo nếu máy còn dùng cho việc khác.
+- GitHub settings → Emails → "Keep my email addresses private" để squash merge trên web cũng dùng noreply.
+- Viết lại lịch sử (`filter-branch`, `rebase`) rồi `push --force-with-lease`: chỉ an toàn khi chưa ai khác dùng branch. Ở công ty gần như cấm trên main. Ruleset `non_fast_forward` chặn hẳn.
+- `--force-with-lease` an toàn hơn `--force`: từ chối nếu remote có commit mà mình chưa có.
+- `git rebase --onto main <commit-cũ> <branch>`: chuyển branch sang base mới sau khi PR trước được squash.
+- **Đổi tên head branch của PR thì GitHub đóng PR**, phải mở PR mới.
+- Squash merge: cấu hình repo lấy tiêu đề và mô tả PR làm commit message, để lịch sử main gọn.
+
+### Câu hỏi phỏng vấn
+1. Cấu trúc của một GitHub Actions workflow? Job và step khác nhau thế nào?
+2. Làm sao để workflow chỉ chạy khi một thư mục thay đổi? Bẫy gì khi kết hợp với required checks?
+3. Reusable workflow là gì, vì sao dùng?
+4. Vì sao pin action theo SHA thay vì tag?
+5. Vì sao scan image trước khi push? `ignore-unfixed` để làm gì?
+6. `npm ci` khác `npm install`?
+7. `GITHUB_TOKEN` là gì? Vì sao đặt `permissions: contents: read`?
+8. Vì sao gitleaks trong CI cần `fetch-depth: 0`?
+9. `--force-with-lease` khác `--force`? Khi nào được force push?
