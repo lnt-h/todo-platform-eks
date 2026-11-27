@@ -120,6 +120,24 @@ Cuối mỗi phase có phần **Câu hỏi phỏng vấn** để tự kiểm tra
 - Cách debug: `curl -v` xem request thô. Request không xuất hiện trong metrics/log của app nghĩa là bị chặn trước khi tới code.
 - Template/thư viện đổi API theo phiên bản: Fastify 5 coi `err` trong error handler là `unknown`, phải khai báo `FastifyError`.
 
+### Frontend gọi API qua reverse proxy
+```
+Browser → /api/todos/* → proxy → todo-service /todos/*
+        → /api/users/* → proxy → user-service /users/*
+```
+- **CORS**: trình duyệt chặn trang ở origin A (`localhost:5173`) gọi sang origin B (`localhost:8080`) trừ khi B cho phép. Gom mọi thứ về cùng origin qua proxy thì không cần cấu hình CORS.
+- Frontend chỉ dùng **đường dẫn tương đối** `/api/...`, không biết địa chỉ service. Proxy lo việc định tuyến:
+  - Dev: Vite `server.proxy`
+  - Docker (Phase 2): nginx
+  - K8s (Phase 4–6): Ingress / AWS ALB
+- Cùng một bản build frontend chạy ở mọi môi trường. Đây là 12-Factor áp dụng cho frontend.
+- Proxy **bỏ tiền tố `/api`** (path rewrite) nên service không cần biết mình đứng sau proxy.
+
+### Bài học debug: xung đột cổng
+- Gọi `localhost:5173` mà nhận về trang của app khác: cổng đã bị process khác chiếm, Vite với `--strictPort` không mở được.
+- Kiểm tra: `lsof -nP -iTCP:5173 -sTCP:LISTEN`. Đổi cổng (`--port 15173`) thay vì tắt process của người khác.
+- Trong K8s không còn chuyện này: mỗi pod có IP riêng, mọi container cùng listen 8080 vẫn được.
+
 ### Giới hạn đã biết (để cải tiến sau)
 - Tự tạo bảng bằng `CREATE TABLE IF NOT EXISTS` lúc khởi động. Thực tế dùng công cụ migration (golang-migrate, Flyway) chạy bằng K8s Job hoặc initContainer.
 
@@ -131,3 +149,5 @@ Cuối mỗi phase có phần **Câu hỏi phỏng vấn** để tự kiểm tra
 5. 12-Factor App nói gì về config?
 6. Vì sao app trong container phải listen `0.0.0.0`?
 7. Khi nào trả 400, 404, 409, 503?
+8. CORS là gì? Reverse proxy giải quyết nó thế nào?
+9. Vì sao frontend nên gọi API bằng đường dẫn tương đối?

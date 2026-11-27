@@ -46,8 +46,17 @@ docs/            kiến trúc, ADR (lý do chọn công cụ), runbook
 ## Lệnh thường dùng
 _(cập nhật dần khi các phase hoàn thành)_
 ```bash
-docker compose up --build        # chạy local toàn bộ hệ thống
+# Test
+cd apps/todo-service && go test -race ./...
+cd apps/user-service && npm test
+cd apps/frontend && npm run lint && npm run build
+
+# Chạy local (cần Postgres; Phase 2 sẽ thay bằng docker compose up)
+DATABASE_URL=postgres://... go run ./cmd/server          # todo-service :8080
+DATABASE_URL=postgres://... npm run dev                  # user-service :3000
+npm run dev                                              # frontend :5173, proxy /api/* tới 2 service
 ```
+Lưu ý: máy người dùng có app khác chiếm cổng 5173, chạy Vite bằng `--port 15173` khi cần.
 
 ## Ghi chú cho Claude
 - Người dùng là sinh viên đang học DevOps: giải thích ngắn gọn **tại sao** khi thêm công cụ/config mới, trả lời bằng tiếng Việt.
