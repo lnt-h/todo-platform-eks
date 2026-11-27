@@ -3,7 +3,7 @@
 Dự án portfolio DevOps để chuẩn bị đi thực tập. **Trọng tâm là DevOps, không phải app.**
 App Todo chỉ cần đủ đơn giản để có cái mà build, deploy, monitor.
 
-Tiến độ chi tiết: xem [ROADMAP.md](ROADMAP.md).
+Tiến độ chi tiết: xem [ROADMAP.md](ROADMAP.md). Sổ tay tự học: [docs/LEARNING.md](docs/LEARNING.md).
 
 ## Nguyên tắc
 - App giữ tối giản (CRUD + `/healthz` + `/metrics` + log JSON). Thời gian dồn cho DevOps.
@@ -52,4 +52,5 @@ docker compose up --build        # chạy local toàn bộ hệ thống
 ## Ghi chú cho Claude
 - Người dùng là sinh viên đang học DevOps: giải thích ngắn gọn **tại sao** khi thêm công cụ/config mới, trả lời bằng tiếng Việt.
 - Sau mỗi bước hoàn thành, tick checkbox tương ứng trong ROADMAP.md và ghi 1 dòng vào mục "Nhật ký" ở cuối file đó.
+- Mỗi khi giải thích khái niệm mới, ghi vào `docs/LEARNING.md` theo phase (là gì / tại sao / áp dụng ở đâu) và thêm câu hỏi phỏng vấn cuối phase.
 - Trước khi chạy lệnh tạo tài nguyên AWS tốn tiền (`terraform apply`), nhắc ước tính chi phí và nhắc destroy.
