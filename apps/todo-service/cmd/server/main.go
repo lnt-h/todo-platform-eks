@@ -15,6 +15,12 @@ import (
 )
 
 func main() {
+	// "todo-service healthcheck" is used by Docker HEALTHCHECK: the distroless
+	// image has no shell or curl, so the binary checks itself.
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
+		os.Exit(healthcheck())
+	}
+
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	if err := run(logger); err != nil {
 		logger.Error("todo-service stopped", "err", err)
@@ -60,6 +66,19 @@ func run(logger *slog.Logger) error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdownCtx)
+}
+
+func healthcheck() int {
+	client := http.Client{Timeout: 2 * time.Second}
+	res, err := client.Get("http://127.0.0.1:" + getenv("PORT", "8080") + "/healthz")
+	if err != nil {
+		return 1
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return 1
+	}
+	return 0
 }
 
 func getenv(key, fallback string) string {
