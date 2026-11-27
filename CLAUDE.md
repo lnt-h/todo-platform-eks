@@ -51,7 +51,18 @@ cd apps/todo-service && go test -race ./...
 cd apps/user-service && npm test
 cd apps/frontend && npm run lint && npm run build
 
-# Chạy local (cần Postgres; Phase 2 sẽ thay bằng docker compose up)
+# Chạy toàn bộ bằng Docker (khuyên dùng): http://localhost:8000
+docker compose up -d --build --wait
+docker compose logs -f todo-service
+docker compose down          # thêm -v để xóa luôn dữ liệu Postgres
+
+# Quét lỗ hổng image
+trivy image --severity HIGH,CRITICAL --ignore-unfixed todo-platform/frontend:dev
+
+# pre-commit (chạy tự động khi commit; chạy tay cho mọi file)
+pre-commit run --all-files
+
+# Chạy từng service không qua Docker (cần Postgres riêng)
 DATABASE_URL=postgres://... go run ./cmd/server          # todo-service :8080
 DATABASE_URL=postgres://... npm run dev                  # user-service :3000
 npm run dev                                              # frontend :5173, proxy /api/* tới 2 service

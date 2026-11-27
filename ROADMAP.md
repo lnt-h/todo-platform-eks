@@ -19,10 +19,11 @@
 - [x] Unit test cho 2 service (Go 81%, Node 98% coverage); frontend kiểm tra bằng lint + build
 
 ## Phase 2 — Docker (`v0.2`)
-- [ ] Dockerfile multi-stage, non-root, distroless cho từng service
-- [ ] `.dockerignore`
-- [ ] `docker-compose.yml` (3 service + Postgres), `docker compose up` chạy được
-- [ ] pre-commit + gitleaks
+- [x] Dockerfile multi-stage, non-root, distroless cho từng service (Go 15MB, Node 174MB, nginx 73MB)
+- [x] `.dockerignore`
+- [x] `docker-compose.yml` (3 service + Postgres, DB per service, healthcheck), mở http://localhost:8000
+- [x] pre-commit + gitleaks (đã thử chặn token giả)
+- [x] Trivy scan local: frontend và todo-service 0 HIGH/CRITICAL
 
 ## Phase 3 — CI với GitHub Actions (`v0.3`)
 - [ ] Workflow riêng cho từng service, có path filter
@@ -85,3 +86,4 @@
 | 2026-11-27 | Phase 0 xong: IAM user + MFA, budgets, anomaly detection, aws login profile `todo` |
 | 2026-11-27 | Phase 1: todo-service (Go) và user-service (Fastify) CRUD + Postgres + metrics + health, test pass |
 | 2026-11-27 | Phase 1: frontend React gọi API qua Vite proxy, chạy thử full stack local OK |
+| 2026-11-27 | Phase 2: Dockerfile cho 3 app, docker compose, vá CVE nginx (57 → 0), pre-commit + gitleaks |
