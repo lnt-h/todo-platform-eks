@@ -151,3 +151,75 @@ Browser → /api/todos/* → proxy → todo-service /todos/*
 7. Khi nào trả 400, 404, 409, 503?
 8. CORS là gì? Reverse proxy giải quyết nó thế nào?
 9. Vì sao frontend nên gọi API bằng đường dẫn tương đối?
+
+---
+
+## Phase 2: Docker
+
+### Multi-stage build
+- **Stage build**: image to, có đủ compiler và devDependencies để biên dịch.
+- **Stage runtime**: chỉ copy kết quả (binary, `dist/`, `node_modules` production). Không có compiler, không có source.
+- Kết quả trong dự án:
+
+| Image | Base runtime | Kích thước |
+|---|---|---|
+| todo-service (Go) | `distroless/static-debian13` | ~15MB |
+| frontend | `nginx-unprivileged:1.31-alpine` | ~73MB |
+| user-service (Node) | `distroless/nodejs24-debian13` | ~174MB |
+
+### Layer cache
+- Docker cache theo từng lệnh. Copy `go.mod`/`package.json` rồi cài dependency **trước**, copy source **sau**. Sửa code thì không phải tải lại dependency.
+- `RUN --mount=type=cache` (BuildKit) giữ cache của Go/npm giữa các lần build.
+
+### Distroless và non-root
+- **Distroless**: không shell, không package manager, không curl. Kẻ tấn công vào được container cũng không có công cụ gì để dùng, và ít gói thì ít CVE.
+- **Non-root** (`USER nonroot`, `USER 101`): container bị chiếm cũng không có quyền root. K8s có thể bắt buộc điều này (`runAsNonRoot`, Kyverno ở Phase 8).
+- nginx non-root phải listen **8080** vì cổng dưới 1024 cần quyền root.
+- Healthcheck trong distroless: không có curl nên dùng chính binary (`/todo-service healthcheck`) hoặc `node -e "fetch(...)"`.
+
+### .dockerignore
+- Loại `node_modules`, `dist`, test, `.env` khỏi build context: build nhanh hơn, image sạch, **không lọt secret vào image**.
+
+### Config nginx bằng biến môi trường
+- Image nginx tự chạy `envsubst` cho `/etc/nginx/templates/*.template` lúc khởi động. Địa chỉ service (`TODO_API_URL`) là env, cùng một image dùng cho compose và K8s.
+- SPA fallback: `try_files $uri /index.html`. File trong `/assets/` có hash trong tên nên cache 1 năm, còn `index.html` thì `no-cache`.
+
+### Docker Compose
+- **Network nội bộ**: các service gọi nhau bằng tên (`postgres`, `todo-service`). Docker có DNS nội bộ.
+- **Chỉ publish frontend** (`8000:8080`). Service và DB không mở ra host, giống mô hình K8s sau này.
+- `depends_on: condition: service_healthy`: chờ DB healthy mới khởi động service.
+- `restart: unless-stopped`: container chết thì tự khởi động lại.
+- **Volume** `pgdata`: dữ liệu còn nguyên sau khi restart container. Postgres 18 mount ở `/var/lib/postgresql` (khác các bản cũ).
+- **Database per service**: `todos` và `users` là 2 database riêng. Service không đọc bảng của nhau.
+
+### Graceful shutdown trong container
+- `docker stop` gửi SIGTERM, chờ timeout rồi SIGKILL.
+- Exit code **0** là thoát đúng cách, **137** (128+9) là bị SIGKILL vì không xử lý SIGTERM. Cả 3 service đều trả 0.
+
+### Quét lỗ hổng image (Trivy)
+- `trivy image --severity HIGH,CRITICAL <image>`.
+- Thực tế gặp phải: `nginx-unprivileged:1.29-alpine` có 56 HIGH, 1 CRITICAL, toàn bộ ở thư viện OS (curl, libexpat…), **không phải code của mình**.
+- Cách xử lý theo thứ tự:
+  1. Dùng base image mới hơn.
+  2. `apk upgrade` lúc build để lấy bản vá mới nhất.
+  3. Gỡ gói không dùng (`apk del curl`) để giảm bề mặt tấn công.
+  4. Lỗi nằm ở chính nginx thì phải lên bản có fix (1.31 mainline). nginx.org khuyên dùng mainline.
+- Kết quả: frontend 0/0, todo-service 0/0. user-service còn 2 HIGH ở `libssl3t64` **chưa có bản vá**. CI dùng `--ignore-unfixed` để không chặn build vì lỗi chưa ai sửa được.
+- nginx đánh số: **chẵn = stable** (1.30), **lẻ = mainline** (1.31).
+
+### pre-commit + gitleaks (shift left)
+- Hook chạy mỗi lần `git commit`: gitleaks, detect-private-key, trailing-whitespace, end-of-file-fixer, check-yaml/json, gofmt.
+- Đã thử: commit một GitHub token giả thì gitleaks chặn (`RuleID: github-pat`).
+- Lỡ commit secret thì: **đổi secret ngay** (coi như đã lộ), rồi mới xóa khỏi lịch sử git.
+- `tsconfig.json` cho phép comment (JSONC) nên phải loại khỏi `check-json`.
+- pre-commit chỉ bảo vệ máy đã chạy `pre-commit install`. CI (Phase 3) chạy lại gitleaks để chắc chắn.
+
+### Câu hỏi phỏng vấn
+1. Multi-stage build là gì, lợi ích?
+2. Vì sao copy `package.json` trước rồi mới copy source?
+3. Distroless là gì? Không có shell thì debug và healthcheck thế nào?
+4. Vì sao container không nên chạy bằng root?
+5. Exit code 137 nghĩa là gì?
+6. `depends_on` có đảm bảo service phụ thuộc đã sẵn sàng không? (Chỉ khi dùng `condition: service_healthy`.)
+7. Trivy báo lỗ hổng ở base image thì xử lý ra sao? Lỗ hổng chưa có bản vá thì sao?
+8. Lỡ commit secret lên GitHub thì làm gì đầu tiên?
