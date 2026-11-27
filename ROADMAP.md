@@ -3,9 +3,10 @@
 Đánh dấu `[x]` khi xong. Mỗi phase là 1 PR, merge xong gắn tag.
 
 ## Phase 0 — Chuẩn bị tài khoản & công cụ
-- [ ] AWS: bật MFA cho root, tạo IAM Identity Center/IAM user dùng hằng ngày
-- [ ] AWS Budgets: alert $10 / $50 / $100 + Cost Anomaly Detection
-- [ ] Kiểm tra tài khoản Free plan hay Paid plan (EKS có bị giới hạn không)
+- [x] AWS: MFA root, IAM user `loganlee-devops` (group `hien-admin`, MFA, không access key), account alias
+- [x] AWS Budgets ($10, $20, $50) + Cost Anomaly Detection (daily email)
+- [x] Tài khoản Paid plan, còn $99.99 credit (làm thêm activity để nhận đủ $200)
+- [x] AWS CLI: `aws login --profile todo` (credentials tạm thời), region ap-southeast-1
 - [x] Cài: git, Docker Desktop, kubectl, helm, kind, terraform, aws cli, go, node
 - [x] `git init`, `.gitignore` chuẩn (template GitHub + chặn secret)
 - [x] Tạo repo GitHub `lnt-h/todo-platform-eks` và push
@@ -81,3 +82,4 @@
 | 2026-11-27 | Khảo sát repo tham khảo, chốt tech stack, tạo CLAUDE.md + ROADMAP.md |
 | 2026-11-27 | Cài helm, kind, go, pnpm, pre-commit, trivy, terraform; git init; scaffold frontend, user-service, todo-service |
 | 2026-11-27 | Tạo repo public github.com/lnt-h/todo-platform-eks, push commit đầu |
+| 2026-11-27 | Phase 0 xong: IAM user + MFA, budgets, anomaly detection, aws login profile `todo` |
