@@ -276,6 +276,7 @@ workflow (.github/workflows/*.yml)
 - Nguyên nhân: trên PR, binary Trivy được lấy từ **cache**. Cache của GitHub Actions **tách theo branch**: `main` không đọc được cache của branch PR, nên phải tải mới, và installer của `trivy-action` không còn tải được.
 - Chạy lại (`gh run rerun --failed`) vẫn lỗi y hệt, nên đây là lỗi cố định, không phải flaky.
 - Cách sửa: chạy Trivy bằng Docker image chính thức có phiên bản cố định (`aquasec/trivy:0.76.2`), đọc image qua Docker socket. Thử trên máy trước, rồi sửa qua PR (main đã được bảo vệ).
+- **Pin image theo digest** (`image:tag@sha256:...`): tag có thể bị push đè (vô tình hoặc bị tấn công supply chain), còn digest là hash nội dung, không đổi được. Giống pin action theo commit SHA. Lấy digest của bản đa kiến trúc bằng `docker buildx imagetools inspect <image>` (dòng `Digest` đầu tiên). Muốn nâng version thì cập nhật cả tag lẫn digest.
 - Bài học:
   - Cache có thể **che giấu lỗi**. Bước nào cần tải từ Internet thì nên có đường không phụ thuộc cache.
   - Đọc log từ dưới lên, tìm dòng `error`/`crit` đầu tiên.
