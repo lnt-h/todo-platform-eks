@@ -1,0 +1,15 @@
+# Local kind cluster. Images are built by docker compose and loaded with
+# `kind load docker-image`, so no registry is needed.
+
+database:
+  # Throwaway local password (same default as docker compose), not a real secret.
+  password: devpassword
+
+postgres:
+  enabled: true
+
+# On, to try the HPA locally (needs metrics-server, see deploy/kind/README.md).
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 3

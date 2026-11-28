@@ -1,0 +1,14 @@
+{{- range $name, $app := .Values.apps }}
+---
+# Non-secret settings, injected as env vars (envFrom in the Deployment).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "todo-platform.labels" (dict "root" $ "name" $name) | nindent 4 }}
+data:
+  {{- range $key, $value := $app.env }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+{{- end }}

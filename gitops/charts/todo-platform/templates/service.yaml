@@ -1,0 +1,20 @@
+{{- range $name, $app := .Values.apps }}
+{{- $ctx := dict "root" $ "name" $name }}
+---
+# Stable name and virtual IP in front of the pods: pods come and go with new
+# IPs, the Service finds them through the selector labels.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "todo-platform.labels" $ctx | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "todo-platform.selectorLabels" $ctx | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ $app.port }}
+      targetPort: http
+{{- end }}

@@ -8,6 +8,7 @@ repos:
       - id: end-of-file-fixer
       - id: check-yaml
         args: [--allow-multiple-documents]
+        exclude: /templates/  # Helm templates are Go templates, checked by helm lint
       - id: check-json
         exclude: tsconfig.*\.json$  # tsconfig allows comments (JSONC)
       - id: check-merge-conflict

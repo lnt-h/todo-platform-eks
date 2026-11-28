@@ -1,0 +1,19 @@
+{{- if .Values.podDisruptionBudget.enabled }}
+{{- range $name, $app := .Values.apps }}
+{{- $ctx := dict "root" $ "name" $name }}
+---
+# Limits how many pods voluntary disruptions (node drain, upgrade) may evict
+# at once. It does not protect against crashes or node failures.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "todo-platform.labels" $ctx | nindent 4 }}
+spec:
+  maxUnavailable: {{ $.Values.podDisruptionBudget.maxUnavailable }}
+  selector:
+    matchLabels:
+      {{- include "todo-platform.selectorLabels" $ctx | nindent 6 }}
+{{- end }}
+{{- end }}

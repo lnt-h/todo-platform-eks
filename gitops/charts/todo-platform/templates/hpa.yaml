@@ -1,0 +1,27 @@
+{{- if .Values.autoscaling.enabled }}
+{{- range $name, $app := .Values.apps }}
+---
+# Adds pods when average CPU goes above the target (percent of requests.cpu),
+# removes them when load drops. Needs metrics-server in the cluster.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "todo-platform.labels" (dict "root" $ "name" $name) | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $name }}
+  minReplicas: {{ $.Values.autoscaling.minReplicas }}
+  maxReplicas: {{ $.Values.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $.Values.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}
+{{- end }}
