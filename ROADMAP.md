@@ -35,10 +35,10 @@
 - [x] Ruleset bảo vệ main: bắt buộc PR + check gitleaks/actionlint, cấm force push
 
 ## Phase 4 — Kubernetes local với kind (`v0.4`)
-- [ ] Helm chart: Deployment, Service, Ingress, ConfigMap, Secret
-- [ ] Liveness/readiness probes, resources requests/limits
-- [ ] HPA + PodDisruptionBudget
-- [ ] values-dev.yaml / values-prod.yaml
+- [x] Helm chart: Deployment, Service, Ingress, ConfigMap, Secret
+- [x] Liveness/readiness probes, resources requests/limits
+- [x] HPA + PodDisruptionBudget
+- [x] values-dev.yaml / values-prod.yaml
 - [ ] Cài thử ArgoCD trên kind
 
 ## Phase 5 — Terraform + AWS (`v0.5`) 💰 bắt đầu tốn tiền
@@ -91,3 +91,5 @@
 | 2026-11-27 | Phase 2: Dockerfile cho 3 app, docker compose, vá CVE nginx (57 → 0), pre-commit + gitleaks |
 | 2026-11-28 | Sửa git identity (author Hien Le, bỏ tên commit theo phase), bật squash-only |
 | 2026-11-28 | Phase 3: 5 workflow GitHub Actions xanh, README + badge, ruleset bảo vệ main |
+| 2026-11-28 | Sửa Trivy chạy từ Docker image pin digest (PR #5), main xanh lại, gắn tag v0.3 |
+| 2026-11-28 | Phase 4: Helm chart chạy trên kind (Traefik, metrics-server), thử HPA 1→3 pod và self-healing |

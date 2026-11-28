@@ -70,6 +70,13 @@ gh pr checks <số PR>
 # pre-commit (chạy tự động khi commit; chạy tay cho mọi file)
 pre-commit run --all-files
 
+# Kubernetes local (kind): cài đặt đầy đủ xem deploy/kind/README.md, app ở http://localhost
+helm lint gitops/charts/todo-platform -f gitops/charts/todo-platform/values-dev.yaml
+helm upgrade --install todo gitops/charts/todo-platform -n todo-dev --create-namespace \
+  -f gitops/charts/todo-platform/values-dev.yaml --wait
+kubectl -n todo-dev get pods,svc,ingress,hpa
+kind load docker-image todo-platform/<app>:dev --name todo   # sau khi build lại image
+
 # Chạy từng service không qua Docker (cần Postgres riêng)
 DATABASE_URL=postgres://... go run ./cmd/server          # todo-service :8080
 DATABASE_URL=postgres://... npm run dev                  # user-service :3000
