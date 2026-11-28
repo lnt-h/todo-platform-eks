@@ -1,0 +1,77 @@
+{{- range $name, $app := .Values.apps }}
+{{- $ctx := dict "root" $ "name" $name }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "todo-platform.labels" $ctx | nindent 4 }}
+spec:
+  {{- /* With HPA on, the HPA owns the replica count; setting it here would fight it. */}}
+  {{- if not $.Values.autoscaling.enabled }}
+  replicas: {{ $app.replicas }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "todo-platform.selectorLabels" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "todo-platform.selectorLabels" $ctx | nindent 8 }}
+      annotations:
+        # Env vars are read only at startup: when the ConfigMap changes, this
+        # hash changes too, which makes Kubernetes roll out new pods.
+        checksum/config: {{ toYaml $app.env | sha256sum }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: {{ $app.runAsUser }}
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: {{ $name }}
+          image: "{{ $app.image.repository }}:{{ $app.image.tag }}"
+          ports:
+            - name: http
+              containerPort: {{ $app.port }}
+          envFrom:
+            - configMapRef:
+                name: {{ $name }}
+          {{- with $app.database }}
+          env:
+            - name: DB_USER
+              value: {{ $.Values.database.username | quote }}
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "todo-platform.dbSecret" $ }}
+                  key: password
+            # $(VAR) is expanded by Kubernetes from the variables above, so the
+            # password never appears in this manifest.
+            - name: DATABASE_URL
+              value: "postgres://$(DB_USER):$(DB_PASSWORD)@{{ $.Values.database.host }}:{{ $.Values.database.port }}/{{ .name }}{{ .params }}"
+          {{- end }}
+          # Liveness: is the process stuck? Failing restarts the container.
+          livenessProbe:
+            httpGet:
+              path: {{ $app.probes.liveness }}
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          # Readiness: can it serve traffic now? Failing removes the pod from
+          # the Service (no restart), e.g. while the database is down.
+          readinessProbe:
+            httpGet:
+              path: {{ $app.probes.readiness }}
+              port: http
+            periodSeconds: 5
+            failureThreshold: 2
+          resources:
+            {{- toYaml $app.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: {{ $app.readOnlyRootFilesystem }}
+            capabilities:
+              drop: ["ALL"]
+{{- end }}

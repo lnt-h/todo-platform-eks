@@ -312,3 +312,79 @@ workflow (.github/workflows/*.yml)
 7. `GITHUB_TOKEN` là gì? Vì sao đặt `permissions: contents: read`?
 8. Vì sao gitleaks trong CI cần `fetch-depth: 0`?
 9. `--force-with-lease` khác `--force`? Khi nào được force push?
+
+---
+
+## Phase 4: Kubernetes local với kind
+
+### kind
+- **Là gì**: Kubernetes chạy trong Docker, mỗi node là một container (`todo-control-plane`, `todo-worker`, `todo-worker2`). Miễn phí, tạo và xóa trong một phút.
+- **Tại sao**: luyện K8s thật trên laptop trước khi trả tiền cho EKS. Chart chạy được trên kind thì lên EKS chỉ khác file values.
+- Node là container riêng nên **không thấy image trên Docker của máy**: phải `kind load docker-image` (hoặc kéo từ registry).
+- `extraPortMappings`: chuyển cổng 80/443 của máy vào node control-plane, nên Traefik phải chạy đúng trên node đó (`nodeSelector` + `tolerations` vì control-plane có taint `NoSchedule`).
+
+### Các object chính (chart sinh ra 20 object cho dev)
+| Object | Vai trò | Ví dụ trong compose |
+|---|---|---|
+| Deployment | "Luôn có N pod chạy image X", tự thay pod chết | `services:` + `restart` |
+| Service | Tên DNS + IP cố định trước các pod (pod đổi IP liên tục) | tên service trong network |
+| Ingress | Luật định tuyến từ ngoài vào (host/path → Service), Ingress controller (Traefik, ALB) thực thi | `ports: 8000:8080` |
+| ConfigMap | Cấu hình không bí mật, nạp thành env | `environment:` |
+| Secret | Mật khẩu, token (chỉ base64, **không phải mã hóa**) | file `.env` |
+| StatefulSet | Pod có tên cố định (`postgres-0`) và volume riêng, cho database | `volumes:` |
+| HPA | Tự tăng/giảm số pod theo CPU | không có |
+| PDB | Giới hạn số pod bị đuổi cùng lúc khi drain node | không có |
+
+### Helm
+- **Là gì**: trình quản lý gói cho K8s. Viết template một lần, giá trị thay đổi để trong `values.yaml`, mỗi môi trường một file đè (`values-dev.yaml`, `values-prod.yaml`).
+- `range` lặp qua map `apps` nên 3 app dùng chung template. Thêm app mới chỉ cần thêm một khối trong values.
+- Kiểm tra trước khi cài: `helm lint`, `helm template` (render ra YAML để đọc).
+- `helm upgrade --install`: chưa có thì cài, có rồi thì nâng cấp. Mỗi lần là một **revision**, `helm rollback` được.
+- Annotation `checksum/config`: env chỉ được đọc lúc pod khởi động, nên khi ConfigMap đổi thì hash đổi, Deployment tự rollout pod mới.
+
+### Probes
+- **Liveness** (`/healthz`): process còn sống không? Fail thì **restart container**. Không được kiểm tra DB: DB chết mà restart app cũng vô ích, còn gây restart dây chuyền.
+- **Readiness** (`/readyz`, có kiểm tra DB): sẵn sàng nhận request chưa? Fail thì **rút pod khỏi Service**, không restart.
+- K8s không có `depends_on`. Service khởi động trước Postgres thì crash rồi được restart (thấy `RESTARTS 3`) cho tới khi kết nối được. Đó là **self-healing**, cách làm bình thường trên K8s.
+
+### Resources
+- `requests`: lượng tài nguyên scheduler **giữ chỗ** khi chọn node, và là mốc 100% để HPA tính phần trăm CPU.
+- `limits.memory`: vượt thì bị kill (OOMKilled). Không đặt `limits.cpu` vì CPU vượt chỉ bị bóp chậm (throttle), thường gây hại nhiều hơn lợi.
+
+### HPA và metrics-server
+- HPA cần metrics-server để đọc CPU của pod (EKS có add-on, kind phải tự cài, kèm `--kubelet-insecure-tls` vì cert tự ký).
+- Đã thử: tạo tải, `todo-service` tăng 1 → 3 pod sau khoảng 30 giây. Giảm thì chậm hơn (mặc định chờ 5 phút ổn định) để không bật/tắt pod liên tục.
+- Khi bật HPA thì **bỏ `replicas` khỏi Deployment**, nếu không mỗi lần `helm upgrade` sẽ kéo số pod về lại.
+
+### PodDisruptionBudget
+- Chỉ bảo vệ khỏi gián đoạn **chủ động** (drain node, nâng cấp cluster), không chống crash.
+- Dùng `maxUnavailable: 1` thay vì `minAvailable: 1`: với 1 replica, `minAvailable: 1` sẽ chặn drain node mãi mãi.
+
+### Bảo mật pod
+- `runAsNonRoot` + `runAsUser` **dạng số**: image distroless khai báo `USER nonroot` bằng tên, K8s không kiểm chứng được tên nên sẽ từ chối chạy.
+- `readOnlyRootFilesystem`, `allowPrivilegeEscalation: false`, `drop: ["ALL"]` capabilities, `seccompProfile: RuntimeDefault`: kẻ tấn công vào được container cũng khó làm gì thêm. Frontend để filesystem ghi được vì nginx sinh file config lúc khởi động.
+- Mật khẩu DB không nằm trong manifest: `DATABASE_URL` ghép bằng `$(DB_PASSWORD)` lấy từ Secret. Prod dùng `existingSecret` do External Secrets tạo.
+
+### Dev và prod khác nhau ở đâu
+| | dev (kind) | prod (EKS) |
+|---|---|---|
+| Image | build local, `kind load` | GHCR/ECR, tag theo git SHA |
+| Database | Postgres StatefulSet trong cluster | RDS (backup, failover do AWS lo) |
+| Secret | chart tạo từ values | External Secrets từ Secrets Manager |
+| Số pod | HPA 1–3 | HPA 2–5 (mất 1 node vẫn còn pod) |
+| Ingress | Traefik, mọi host | ALB, domain thật |
+
+### Công cụ xem cluster
+- **Headlamp**: giao diện desktop, đọc `~/.kube/config`, xem pod, log, event.
+- `kubectl get pods -A`, `kubectl describe pod <tên>` (xem Events khi pod lỗi), `kubectl logs`, `kubectl top pods`.
+
+### Câu hỏi phỏng vấn
+1. Pod, Deployment, Service, Ingress khác nhau thế nào?
+2. Liveness và readiness probe khác nhau ra sao? Vì sao liveness không nên kiểm tra database?
+3. `requests` và `limits` khác nhau? Chuyện gì xảy ra khi vượt limit memory? Vượt CPU?
+4. HPA hoạt động thế nào? Vì sao bật HPA thì không đặt `replicas`?
+5. PDB dùng để làm gì? Vì sao `minAvailable: 1` với 1 replica là bẫy?
+6. Deployment và StatefulSet khác nhau? Khi nào dùng StatefulSet?
+7. Secret trong K8s có an toàn không? Quản lý secret thế nào trong production?
+8. Vì sao dùng Helm? Làm sao tách cấu hình dev/prod?
+9. Pod khởi động trước database thì sao? K8s xử lý thế nào khi không có `depends_on`?

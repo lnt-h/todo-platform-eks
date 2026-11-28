@@ -1,0 +1,7 @@
+apiVersion: v2
+name: todo-platform
+description: Todo platform (frontend, todo-service, user-service) on Kubernetes
+type: application
+# version: version of this chart. appVersion: version of the apps it deploys.
+version: 0.1.0
+appVersion: "0.4.0"

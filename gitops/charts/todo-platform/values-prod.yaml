@@ -1,0 +1,40 @@
+# EKS. The RDS endpoint, domain and image tags get filled in from Phase 5-6
+# (CI will bump the image tags automatically).
+
+apps:
+  frontend:
+    image:
+      repository: ghcr.io/lnt-h/frontend
+      tag: sha-5e869df84ff3eaa6bccfcadd9d6caf3cc104ad43
+  todo-service:
+    image:
+      repository: ghcr.io/lnt-h/todo-service
+      tag: sha-5e869df84ff3eaa6bccfcadd9d6caf3cc104ad43
+    database:
+      name: todos
+      params: "?sslmode=require" # RDS: encrypt the connection
+  user-service:
+    image:
+      repository: ghcr.io/lnt-h/user-service
+      tag: sha-5e869df84ff3eaa6bccfcadd9d6caf3cc104ad43
+
+database:
+  host: todo-db.xxxxxxxx.ap-southeast-1.rds.amazonaws.com # RDS, from Terraform output
+  # Created by External Secrets from AWS Secrets Manager, never stored in Git.
+  existingSecret: todo-db
+
+postgres:
+  enabled: false
+
+# At least 2 pods per app, so one node going away doesn't take an app down.
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+
+ingress:
+  className: alb # AWS Load Balancer Controller creates an ALB
+  host: todo.example.com
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip

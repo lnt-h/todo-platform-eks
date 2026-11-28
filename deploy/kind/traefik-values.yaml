@@ -1,0 +1,31 @@
+# Traefik as the ingress controller for the local kind cluster.
+# helm upgrade --install traefik traefik/traefik --version 43.0.0 \
+#   -n traefik --create-namespace -f deploy/kind/traefik-values.yaml
+
+# Become the default IngressClass, so Ingress objects don't need to name it.
+ingressClass:
+  enabled: true
+  isDefaultClass: true
+
+providers:
+  kubernetesIngress:
+    enabled: true
+
+# Expose Traefik on fixed NodePorts. kind maps host 80/443 to these ports
+# on the control-plane node (see cluster.yaml).
+service:
+  spec:
+    type: NodePort
+ports:
+  web:
+    nodePort: 30080
+  websecure:
+    nodePort: 30443
+
+# Run on the control-plane node, the only node with the host port mapping.
+nodeSelector:
+  node-role.kubernetes.io/control-plane: ""
+tolerations:
+  - key: node-role.kubernetes.io/control-plane
+    operator: Exists
+    effect: NoSchedule

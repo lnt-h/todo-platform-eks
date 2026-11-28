@@ -1,0 +1,102 @@
+# Default values. Environment files (values-dev.yaml, values-prod.yaml) override them:
+#   helm upgrade --install todo gitops/charts/todo-platform -f values-dev.yaml
+
+# Every app below gets a Deployment, Service, ConfigMap, HPA and PDB.
+# The map key is also the Service name, so apps reach each other by it
+# (http://todo-service:8080), exactly like in docker compose.
+apps:
+  frontend:
+    image:
+      repository: todo-platform/frontend
+      tag: dev
+    port: 8080
+    replicas: 1
+    probes:
+      liveness: /healthz
+      readiness: /healthz
+    # Non-secret settings, rendered into a ConfigMap.
+    env:
+      TODO_API_URL: http://todo-service:8080
+      USER_API_URL: http://user-service:3000
+    resources:
+      requests: { cpu: 10m, memory: 16Mi }
+      limits: { memory: 64Mi }
+    # nginx writes the rendered config at startup, so its filesystem stays writable.
+    readOnlyRootFilesystem: false
+    # Numeric UID: Kubernetes can only verify runAsNonRoot with a number.
+    runAsUser: 101 # nginx-unprivileged
+
+  todo-service:
+    image:
+      repository: todo-platform/todo-service
+      tag: dev
+    port: 8080
+    replicas: 1
+    probes:
+      liveness: /healthz
+      readiness: /readyz # checks the database too
+    env:
+      PORT: "8080"
+    # DATABASE_URL is built from these plus the password in the db Secret.
+    database:
+      name: todos
+      params: "?sslmode=disable"
+    resources:
+      requests: { cpu: 10m, memory: 16Mi }
+      limits: { memory: 64Mi }
+    readOnlyRootFilesystem: true
+    runAsUser: 65532 # distroless "nonroot"
+
+  user-service:
+    image:
+      repository: todo-platform/user-service
+      tag: dev
+    port: 3000
+    replicas: 1
+    probes:
+      liveness: /healthz
+      readiness: /readyz
+    env:
+      PORT: "3000"
+    database:
+      name: users
+      params: ""
+    resources:
+      requests: { cpu: 20m, memory: 64Mi }
+      limits: { memory: 192Mi }
+    readOnlyRootFilesystem: true
+    runAsUser: 65532 # distroless "nonroot"
+
+# Database connection shared by the services.
+database:
+  host: postgres
+  port: 5432
+  username: postgres
+  # Leave empty and set existingSecret in real environments: the Secret is then
+  # created outside the chart (External Secrets from AWS Secrets Manager).
+  password: ""
+  existingSecret: ""
+
+# In-cluster Postgres for local clusters only. Production uses RDS.
+postgres:
+  enabled: false
+  image: postgres:18-alpine
+  storage: 1Gi
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+
+# At most one pod of each app may be down during voluntary disruptions
+# (node drain, cluster upgrade). Safe even with a single replica.
+podDisruptionBudget:
+  enabled: true
+  maxUnavailable: 1
+
+ingress:
+  enabled: true
+  className: "" # empty = the cluster's default IngressClass
+  host: "" # empty = any host
+  annotations: {}

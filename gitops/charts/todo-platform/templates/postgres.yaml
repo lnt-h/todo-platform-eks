@@ -1,0 +1,94 @@
+{{- /*
+In-cluster Postgres for local clusters (kind). Production uses RDS instead,
+because running a database well (backups, failover) is a job of its own.
+*/}}
+{{- if .Values.postgres.enabled }}
+{{- $ctx := dict "root" $ "name" "postgres" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  labels:
+    {{- include "todo-platform.labels" $ctx | nindent 4 }}
+data:
+  # Runs once, when the volume is empty. Database per service, as in compose.
+  init.sql: |
+    {{- range $name, $app := .Values.apps }}
+    {{- with $app.database }}
+    CREATE DATABASE {{ .name }};
+    {{- end }}
+    {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.database.host }}
+  labels:
+    {{- include "todo-platform.labels" $ctx | nindent 4 }}
+spec:
+  selector:
+    {{- include "todo-platform.selectorLabels" $ctx | nindent 4 }}
+  ports:
+    - name: postgres
+      port: {{ .Values.database.port }}
+      targetPort: postgres
+---
+# StatefulSet, not Deployment: the pod keeps a stable name (postgres-0) and
+# its own PersistentVolume, so data survives pod restarts.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  labels:
+    {{- include "todo-platform.labels" $ctx | nindent 4 }}
+spec:
+  serviceName: {{ .Values.database.host }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "todo-platform.selectorLabels" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "todo-platform.selectorLabels" $ctx | nindent 8 }}
+    spec:
+      containers:
+        - name: postgres
+          image: {{ .Values.postgres.image }}
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: {{ .Values.database.username | quote }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "todo-platform.dbSecret" . }}
+                  key: password
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", {{ .Values.database.username | quote }}]
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 512Mi }
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+      volumes:
+        - name: init
+          configMap:
+            name: postgres-init
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.postgres.storage }}
+{{- end }}

@@ -1,0 +1,18 @@
+# Local Kubernetes cluster: kind create cluster --config deploy/kind/cluster.yaml
+# Each "node" is a Docker container.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: todo
+nodes:
+  - role: control-plane
+    # Forward host ports 80/443 to NodePorts 30080/30443 on this node.
+    # The ingress controller (Traefik) listens on those NodePorts.
+    extraPortMappings:
+      - containerPort: 30080
+        hostPort: 80
+        protocol: TCP
+      - containerPort: 30443
+        hostPort: 443
+        protocol: TCP
+  - role: worker
+  - role: worker
