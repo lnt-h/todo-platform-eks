@@ -1,0 +1,8 @@
+# metrics-server: collects pod CPU/memory, needed by the HPA and `kubectl top`.
+# helm upgrade --install metrics-server metrics-server/metrics-server --version 3.14.0 \
+#   -n kube-system -f deploy/kind/metrics-server-values.yaml
+
+# kind kubelets use self-signed certificates. Fine for a local cluster only;
+# EKS ships metrics-server as an add-on with proper certificates.
+args:
+  - --kubelet-insecure-tls
